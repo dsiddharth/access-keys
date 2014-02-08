@@ -222,50 +222,69 @@ class Auth(controller.V2Controller):
 
         Returns auth_token_data, (user_ref, tenant_ref, metadata_ref)
         """
-        if 'passwordCredentials' not in auth:
-            raise exception.ValidationError(
-                attribute='passwordCredentials', target='auth')
+        if 'accessKeyCredentials' in auth:
+            if "userId" not in auth['accessKeyCredentials']:
+                raise exception.ValidationError(
+                    attribute='userId', target='accessKeyCredentials')
+                
+            if "accessKey" not in auth['accessKeyCredentials']:
+                raise exception.ValidationError(
+                    attribute='accessKey', target='accessKeyCredentials')
 
-        if "password" not in auth['passwordCredentials']:
-            raise exception.ValidationError(
-                attribute='password', target='passwordCredentials')
+            user_id = auth['accessKeyCredentials']['userId']
+            access_key = auth['accessKeyCredentials']['accessKey']
 
-        password = auth['passwordCredentials']['password']
-        if password and len(password) > CONF.identity.max_password_length:
-            raise exception.ValidationSizeError(
-                attribute='password', size=CONF.identity.max_password_length)
-
-        if ("userId" not in auth['passwordCredentials'] and
-                "username" not in auth['passwordCredentials']):
-            raise exception.ValidationError(
-                attribute='username or userId',
-                target='passwordCredentials')
-
-        user_id = auth['passwordCredentials'].get('userId', None)
-        if user_id and len(user_id) > CONF.max_param_size:
-            raise exception.ValidationSizeError(attribute='userId',
-                                                size=CONF.max_param_size)
-
-        username = auth['passwordCredentials'].get('username', '')
-        if len(username) > CONF.max_param_size:
-            raise exception.ValidationSizeError(attribute='username',
-                                                size=CONF.max_param_size)
-
-        if username:
             try:
-                user_ref = self.identity_api.get_user_by_name(
-                    username, DEFAULT_DOMAIN_ID)
-                user_id = user_ref['id']
-            except exception.UserNotFound as e:
+                user_ref = self.identity_api.authenticate_access_key(
+                        user_id = user_id, access_key = access_key)
+            except AssertionError as e:
                 raise exception.Unauthorized(e)
 
-        try:
-            user_ref = self.identity_api.authenticate(
-                user_id=user_id,
-                password=password)
-        except AssertionError as e:
-            raise exception.Unauthorized(e)
+        elif 'passwordCredentials' in auth:
+            if "password" not in auth['passwordCredentials']:
+                raise exception.ValidationError(
+                    attribute='password', target='passwordCredentials')
 
+            password = auth['passwordCredentials']['password']
+            if password and len(password) > CONF.identity.max_password_length:
+                raise exception.ValidationSizeError(
+                    attribute='password', size=CONF.identity.max_password_length)
+
+            if ("userId" not in auth['passwordCredentials'] and
+                    "username" not in auth['passwordCredentials']):
+                raise exception.ValidationError(
+                    attribute='username or userId',
+                    target='passwordCredentials')
+
+            user_id = auth['passwordCredentials'].get('userId', None)
+            if user_id and len(user_id) > CONF.max_param_size:
+                raise exception.ValidationSizeError(attribute='userId',
+                                                    size=CONF.max_param_size)
+
+            username = auth['passwordCredentials'].get('username', '')
+            if len(username) > CONF.max_param_size:
+                raise exception.ValidationSizeError(attribute='username',
+                                                size=CONF.max_param_size)
+
+            if username:
+                try:
+                    user_ref = self.identity_api.get_user_by_name(
+                        username, DEFAULT_DOMAIN_ID)
+                    user_id = user_ref['id']
+                except exception.UserNotFound as e:
+                    raise exception.Unauthorized(e)
+
+            try:
+                user_ref = self.identity_api.authenticate(
+                    user_id=user_id,
+                    password=password)
+            except AssertionError as e:
+                raise exception.Unauthorized(e)
+
+
+        else:
+            raise exception.ValidationError(
+                attribute='passwordCredentials', target='auth')
         metadata_ref = {}
         tenant_id = self._get_project_id_from_auth(auth)
         tenant_ref, metadata_ref['roles'] = self._get_project_roles_and_ref(
