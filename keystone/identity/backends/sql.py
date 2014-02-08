@@ -75,11 +75,6 @@ class UserGroupMembership(sql.ModelBase, sql.DictBase):
                           primary_key=True)
 
 
-def my_logger(text):
-    outfile = open('/home/vegetto/logger/temp.log', "a")
-    outfile.writelines(text + "\n")
-    outfile.close()
-
 @dependency.requires('assignment_api')
 class Identity(sql.Base, identity.Driver):
     def default_assignment_driver(self):
@@ -117,16 +112,12 @@ class Identity(sql.Base, identity.Driver):
     # Identity interface
     def authenticate(self, user_id, password):
         session = self.get_session()
-        my_logger("User id: " + user_id)
         user_ref = None
         valid = True
         try:
-            my_logger("Trying")
             user_ref = self._get_user(session, user_id)
         except exception.UserNotFound:
-            my_logger("Accessing Key")
             user_ref = self._get_user_from_access_key(user_id)
-            my_logger("Accessed key")
             
             if not user_ref:
                 raise AssertionError('Invalid user / password')
@@ -138,10 +129,8 @@ class Identity(sql.Base, identity.Driver):
     # Identity interface
     def authenticate_access_key(self, user_id, access_key):
         session = self.get_session()
-        my_logger("User id: " + user_id)
         user_ref = None
         try:
-            my_logger("Trying")
             user_ref = self._get_user(session, user_id)
         except exception.UserNotFound:
             raise AssertionError('Invalid user / access key')
@@ -188,7 +177,6 @@ class Identity(sql.Base, identity.Driver):
 
     def get_user_by_name(self, user_name, domain_id):
         session = self.get_session()
-        my_logger("User name: " + user_name + " dom: " + domain_id)
         query = session.query(User)
         query = query.filter_by(name=user_name)
         query = query.filter_by(domain_id=domain_id)

@@ -44,6 +44,18 @@ class Router(wsgi.ComposableRouter):
                        controller=token_controller,
                        action='endpoints',
                        conditions=dict(method=['GET']))
+        mapper.connect('/tokens/access_keys/',
+                       controller=token_controller,
+                       action='',
+                       conditions=dict(method=['POST']))
+        mapper.connect('/tokens/access_keys',
+                       controller=token_controller,
+                       action='',
+                       conditions=dict(method=['GET']))
+        mapper.connect('/tokens/access_keys',
+                       controller=token_controller,
+                       action='',
+                       conditions=dict(method=['DELETE']))
 
         # Certificates used to verify auth tokens
         mapper.connect('/certificates/ca',
