@@ -234,6 +234,25 @@ class Identity(sql.Base, identity.Driver):
                                             group_id=group_id))
             session.flush()
 
+    def add_access_key(self, user_id, access_key):
+        session = self.get_session()
+        if self.check_access_key(access_key, user_id):
+            return
+
+        with session.begin():
+            session.add(AccessKey(id=user_id, access_key=key))
+            session.flush()
+
+    def remove_access_key(self, user_id, access_key):
+        session = self.get_session()
+        if not self.check_access_key(access_key, user_id):
+            raise exception.NotFound('Access key not found for the user')
+        query = session.query(AccessKey).filter_by(id=user_id)
+        access_key_ref = query.filter_by(access_key=access_key)
+        with session.begin():
+            session.delete(access_key_ref)
+            session.flush()
+
     def check_user_in_group(self, user_id, group_id):
         session = self.get_session()
         self.get_group(group_id)
