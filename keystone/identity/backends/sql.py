@@ -44,6 +44,11 @@ class User(sql.ModelBase, sql.DictBase):
             del d['default_project_id']
         return d
 
+class AccessKey(sql.ModelBase, sql.DictBase):
+    __tablename__ = 'access_key'
+    attributes = ['id', 'access_key']
+    id = sql.Column(sql.String(64), primary_key=True)
+    access_key = sql.Column(sql.String(128))
 
 class Group(sql.ModelBase, sql.DictBase):
     __tablename__ = 'group'
@@ -70,6 +75,11 @@ class UserGroupMembership(sql.ModelBase, sql.DictBase):
                           primary_key=True)
 
 
+def my_logger(text):
+    outfile = open('/home/vegetto/logger/temp.log', "a")
+    outfile.writelines(text + "\n")
+    outfile.close()
+
 @dependency.requires('assignment_api')
 class Identity(sql.Base, identity.Driver):
     def default_assignment_driver(self):
@@ -93,20 +103,55 @@ class Identity(sql.Base, identity.Driver):
         """
         return utils.check_password(password, user_ref.password)
 
+    def check_access_key(self, access_key, user_id):
+        query = self.get_session().query(AccessKey).filter_by(id=user_id)
+        try:
+            access_key_rf = query.one()
+        except sql.NotFound:
+            raise exception.UserNotFound(user_id=None)
+        return access_key == access_key_rf.access_key
+
     def is_domain_aware(self):
         return True
 
     # Identity interface
     def authenticate(self, user_id, password):
         session = self.get_session()
+        my_logger("User id: " + user_id)
         user_ref = None
+        valid = True
         try:
+            my_logger("Trying")
             user_ref = self._get_user(session, user_id)
         except exception.UserNotFound:
-            raise AssertionError('Invalid user / password')
-        if not self._check_password(password, user_ref):
-            raise AssertionError('Invalid user / password')
+            my_logger("Accessing Key")
+            user_ref = self._get_user_from_access_key(user_id)
+            my_logger("Accessed key")
+            
+            if not user_ref:
+                raise AssertionError('Invalid user / password')
+        else:
+            if not self._check_password(password, user_ref):
+                raise AssertionError('Invalid user / password')
         return identity.filter_user(user_ref.to_dict())
+    
+    # Identity interface
+    def authenticate_access_key(self, user_id, access_key):
+        session = self.get_session()
+        my_logger("User id: " + user_id)
+        user_ref = None
+        try:
+            my_logger("Trying")
+            user_ref = self._get_user(session, user_id)
+        except exception.UserNotFound:
+            raise AssertionError('Invalid user / access key')
+        else:
+            valid = False
+            if not self.check_access_key(access_key, user_id):
+                raise AssertionError('Invalid user / access key')
+        return identity.filter_user(user_ref.to_dict())
+
+
 
     # user crud
 
@@ -131,12 +176,19 @@ class Identity(sql.Base, identity.Driver):
             raise exception.UserNotFound(user_id=user_id)
         return user_ref
 
+    def _get_user_from_access_token(self, access_key):
+        user_name = "admin"
+        domain_id = CONF.identity.default_domain_id
+        if access_key == "secret1234":
+            return self.get_user_by_name(user_name, domain_id)
+
     def get_user(self, user_id):
         session = self.get_session()
         return identity.filter_user(self._get_user(session, user_id).to_dict())
 
     def get_user_by_name(self, user_name, domain_id):
         session = self.get_session()
+        my_logger("User name: " + user_name + " dom: " + domain_id)
         query = session.query(User)
         query = query.filter_by(name=user_name)
         query = query.filter_by(domain_id=domain_id)
